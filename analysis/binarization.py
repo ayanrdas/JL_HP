@@ -44,7 +44,10 @@ def find_largest_void(frame: np.ndarray):
 
 
 def find_island_properties(frame: np.ndarray, bin_config: BinarizationConfig):
+
     def get_nearest_neighbors(islands: list[tuple], k:float):
+        if len(islands) < 2:
+            return np.nan
         k_num = int(np.ceil(k * len(islands)) - 1)
         points = np.array(islands, dtype = np.dtype([('x', 'float'), ('y', 'float')]))
         a, b = points.reshape(len(islands), 1), points.reshape(1, len(islands))
@@ -114,6 +117,12 @@ def analyze_binarization(video: np.ndarray, name: str, bin_config: BinarizationC
         from visualization import save_binarization_visualization
         from visualization import save_binarization_plots
         from visualization import save_correlation_visualization
+        from visualization import save_particle_boundary_visualization
+        from utils.edge_detection import segment_frame
+        from utils.boundary_roughness import (
+            analyze_boundary,
+            save_roughness_time_series_outputs,
+        )
         
     void_area_lst = []
     island_area_lst = []
@@ -128,8 +137,11 @@ def analyze_binarization(video: np.ndarray, name: str, bin_config: BinarizationC
     correlation_max = int(video.shape[1]/2 * binning_factor)
     mid_point = frame_indices[int((len(frame_indices) - 1)/2)]
     save_spots = np.array([0, mid_point, frame_indices[-1]])
-
-    #Test comment
+    # Boundary PNG overlays: analysis frames except the final one
+    if len(frame_indices) > 1:
+        boundary_save_frames = set(frame_indices[:-1])
+    else:
+        boundary_save_frames = set(frame_indices)
 
     for frame_idx in frame_indices:
         frame = video[frame_idx]
@@ -201,6 +213,30 @@ def analyze_binarization(video: np.ndarray, name: str, bin_config: BinarizationC
     fig = None
     if out_config.save_visualizations:
         fig = save_binarization_plots(void_percent_gain_list, island_percent_gain_list, num_frames, frame_step)
+
+        # Edge roughness for ALL video frames: n_eff, dr/C CSVs, evolution GIFs
+        vprint(f'Computing boundary roughness for all {num_frames} frames')
+        roughness_frame_results = []
+        for frame_idx in range(num_frames):
+            try:
+                _mask, boundary, _center, overlay, _isolated = segment_frame(video[frame_idx])
+                result = analyze_boundary(boundary)
+                roughness_frame_results.append((frame_idx, result))
+                if frame_idx in boundary_save_frames:
+                    save_particle_boundary_visualization(overlay, frame_idx, name)
+            except Exception as e:
+                roughness_frame_results.append((frame_idx, None))
+                vprint(f'Particle boundary / roughness failed on frame {frame_idx}: {e}')
+
+        roughness_paths = save_roughness_time_series_outputs(roughness_frame_results, name)
+        vprint(f"Saved n_eff CSV: {roughness_paths['mode_number_csv']}")
+        vprint(f"Saved n_eff plot: {roughness_paths['mode_number_png']}")
+        vprint(f"Saved dr CSV: {roughness_paths['dr_csv']}")
+        vprint(f"Saved C CSV: {roughness_paths['correlation_csv']}")
+        if roughness_paths['dr_gif']:
+            vprint(f"Saved dr GIF: {roughness_paths['dr_gif']}")
+        if roughness_paths['correlation_gif']:
+            vprint(f"Saved C GIF: {roughness_paths['correlation_gif']}")
 
     img_dims = video[0].shape[0] * video[0].shape[1] / (binning_factor ** 2)
     
