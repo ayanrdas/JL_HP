@@ -19,6 +19,13 @@ def save_binarization_visualization(original_frame: np.ndarray, binarized_frame:
     plt.close('all')
     return
 
+def save_particle_boundary_visualization(overlay: np.ndarray, frame_idx: int, name: str):
+    """Save raw-frame particle boundary overlay (BGR) next to binarization plots."""
+    import cv2
+    figpath = os.path.join(name, f'Particle Boundary Frame {frame_idx}.png')
+    cv2.imwrite(figpath, overlay)
+    return
+
 def save_correlation_visualization(correlation_2d: np.ndarray, frame_idx: int | tuple, name: str, correlation_type: str, downsample: int, um_px_ratio: float):
     m, n = correlation_2d.shape
     img_shape_ratio = n/m
